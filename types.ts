@@ -4,7 +4,7 @@ export interface HealthMetric {
   value: number | string;
   unit: string;
   trend: 'up' | 'down' | 'stable';
-  riskLevel: 'Low' | 'Moderate' | 'High'; // Aligned with MedGemma 1.5 requirement
+  riskLevel: 'Low' | 'Moderate' | 'High';
   status: 'normal' | 'warning' | 'critical';
   description: string;
   normalRange?: string;
@@ -41,8 +41,21 @@ export interface GenomicMarker {
   significance: 'Pathogenic' | 'VUS' | 'Likely Benign' | 'Benign';
 }
 
+/**
+ * Added missing RiskAssessment interface to satisfy import in GenomicsRiskCard.tsx
+ */
 export interface RiskAssessment {
-  malignancy_risk: 'Low' | 'Elevated' | 'High' | 'Critical';
+  malignancy_risk: string;
+  summary: string;
+}
+
+export interface DetailedRiskAssessment {
+  malignancy_risk: {
+    level: 'Low' | 'Moderate' | 'High' | 'Critical';
+    confidence: number;
+  };
+  cognitive_progression_risk: 'No Progression' | 'Early' | 'Moderate' | 'Significant Progression';
+  metabolic_cardiovascular_risk: 'Low' | 'Elevated' | 'High';
   summary: string;
 }
 
@@ -53,7 +66,7 @@ export interface ImagingReport {
   modality: 'MRI' | 'CT' | 'X-Ray' | 'Ultrasound';
   findings: string;
   interpretation: string;
-  riskScore: number; // 0-100 (Simplified Cancer Risk Interpretation)
+  riskScore: number;
   nextSteps: string[];
 }
 
@@ -80,11 +93,13 @@ export interface AnalysisResult {
   predictions: Prediction[];
   imagingReports?: ImagingReport[];
   genomicMarkers?: GenomicMarker[];
-  riskAssessment?: RiskAssessment;
+  riskAssessment: DetailedRiskAssessment;
   actionPlan: ActionItem[];
   historicalTrends: HistoricalDataPoint[];
   flaggedNotes: string[];
   researchSources: ResearchLink[];
+  symptomsDetected: string[];
+  suggestedNextSteps: string[];
 }
 
 export interface UploadedFile {
