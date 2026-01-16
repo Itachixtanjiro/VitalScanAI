@@ -1,0 +1,7 @@
+{
+  "name": "VitalScan AI Health Analytics",
+  "description": "An advanced AI-powered health dashboard that analyzes medical notes, lab reports, and diagnostic images to provide comprehensive health summaries and predictive insights.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
