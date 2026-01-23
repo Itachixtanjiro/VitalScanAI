@@ -1,5 +1,5 @@
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { ChatMessage, AnalysisResult } from '../types';
 import { createHealthChatSession } from '../geminiService';
 
@@ -21,12 +21,13 @@ export const useChat = (initialMessage: string) => {
     setIsTyping(true);
 
     try {
-      const resultStream = await chatSessionRef.current.sendMessageStream({ message });
+      const streamResponse = await chatSessionRef.current.sendMessageStream({ message });
       let fullText = '';
+      
       setChatMessages(prev => [...prev, { role: 'model', text: '' }]);
 
-      for await (const chunk of resultStream) {
-        fullText += chunk.text;
+      for await (const chunk of streamResponse) {
+        fullText += (chunk.text || '');
         setChatMessages(prev => {
           const newMsgs = [...prev];
           newMsgs[newMsgs.length - 1].text = fullText;
@@ -34,7 +35,8 @@ export const useChat = (initialMessage: string) => {
         });
       }
     } catch (err) {
-      console.error(err);
+      console.error('Chat Synthesis Error:', err);
+      setChatMessages(prev => [...prev, { role: 'model', text: "I encountered an error synthesizing that query. Please check your connection." }]);
     } finally {
       setIsTyping(false);
     }

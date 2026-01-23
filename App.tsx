@@ -1,115 +1,116 @@
 
-import React, { useEffect, useRef, useState } from 'react';
-import { useAnalysis } from './hooks/useAnalysis';
-import { useChat } from './hooks/useChat';
+import React, { useState, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
-import { Dashboard } from './components/Dashboard';
-import { FileUploader } from './components/FileUploader';
-import { BackendConfigModal } from './components/BackendConfigModal';
-import { AlertTriangle, MessageSquare, Send, X, Sparkles, Send as SendIcon } from 'lucide-react';
+import { UploadPanel } from './components/UploadPanel';
+import { DashboardPage } from './pages/Dashboard';
+import { AuthPortal } from './components/AuthPortal';
+import { LegalFooter } from './components/LegalFooter';
+import { analyzeHealthArtifacts } from './services/api';
+import { SynthesisResponse } from './types/ClinicalSynthesis';
+import { UploadedFile } from './types';
+import { AlertTriangle, Database, BrainCircuit, Activity, FileCheck, ShieldCheck } from 'lucide-react';
+
+const PROCESSING_STEPS = [
+  { icon: <Database size={18} />, text: "Anonymizing Clinical Artifacts..." },
+  { icon: <FileCheck size={18} />, text: "Extracting Probabilistic Tokens..." },
+  { icon: <BrainCircuit size={18} />, text: "ROI Latent Space Activation..." },
+  { icon: <Activity size={18} />, text: "Synthesizing Research Insights..." }
+];
 
 const App: React.FC = () => {
-  const { analysisResult, isAnalyzing, error, setError, performAnalysis, resetAnalysis } = useAnalysis();
-  const { isChatOpen, setIsChatOpen, chatMessages, isTyping, initChat, sendMessage } = useChat(`I am your MedGemma Advocate. Please upload your health records (notes, labs, or imaging) to begin the synthesis.`);
-  
-  const [isConfigOpen, setIsConfigOpen] = useState(false);
-  const [userInput, setUserInput] = useState('');
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [result, setResult] = useState<SynthesisResponse | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [activeStep, setActiveStep] = useState(0);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (analysisResult) {
-      initChat(analysisResult);
+    let interval: any;
+    if (isAnalyzing) {
+      interval = setInterval(() => {
+        setActiveStep((prev) => (prev + 1) % PROCESSING_STEPS.length);
+      }, 2500);
+    } else {
+      setActiveStep(0);
     }
-  }, [analysisResult]);
+    return () => clearInterval(interval);
+  }, [isAnalyzing]);
 
-  useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [chatMessages]);
+  const handleAnalysis = async (files: UploadedFile[]) => {
+    setIsAnalyzing(true);
+    setError(null);
+    try {
+      const data = await analyzeHealthArtifacts(files);
+      setResult(data);
+    } catch (err: any) {
+      setError(err.message || "Synthesizer failed.");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  if (!isAuthenticated) return <AuthPortal onAuthenticated={() => setIsAuthenticated(true)} />;
 
   return (
-    <div className="min-h-screen flex bg-[#f8fafc] font-sans overflow-x-hidden">
-      <Sidebar onReset={resetAnalysis} onOpenConfig={() => setIsConfigOpen(true)} isActive={!!analysisResult} />
+    <div className="min-h-screen flex flex-col bg-[#f8fafc] font-sans overflow-x-hidden">
+      <div className="flex flex-1">
+        <Sidebar onReset={() => setResult(null)} onOpenConfig={() => {}} isActive={!!result} />
 
-      <main className="flex-1 bg-[#fbfcfd]">
-        <Header />
-
-        <div className="p-12 max-w-7xl mx-auto">
-          {error && (
-            <div className="mb-10 p-6 bg-rose-50 border border-rose-100 rounded-[2.5rem] text-rose-700 shadow-xl animate-in slide-in-from-top-4">
-              <div className="flex items-center gap-4 mb-3">
-                <AlertTriangle className="text-rose-600" size={24} />
-                <h4 className="font-black text-lg">System Error</h4>
+        <main className="flex-1">
+          <Header />
+          <div className="p-12 max-w-7xl mx-auto pb-32">
+            {error && (
+              <div className="mb-10 p-6 bg-rose-50 border border-rose-100 rounded-[2.5rem] text-rose-700 flex items-center gap-4 animate-in slide-in-from-top-4">
+                <AlertTriangle className="text-rose-600" />
+                <p className="text-sm font-bold">{error}</p>
               </div>
-              <p className="text-sm opacity-80 mb-4">{error}</p>
-              <button onClick={() => setIsConfigOpen(true)} className="px-5 py-2 bg-rose-600 text-white rounded-xl text-xs font-black uppercase">Update Backend</button>
-            </div>
-          )}
+            )}
 
-          <div className="flex flex-col md:flex-row md:items-end justify-between mb-16 gap-6">
-            <div>
-              <div className="flex items-center gap-3 text-indigo-600 font-black text-xs uppercase tracking-[0.3em] mb-3">
-                <Sparkles size={18} /> MedGemma 1.5 Synthesis
+            <div className="mb-16">
+              <div className="flex items-center gap-3 text-indigo-600 font-black text-[10px] uppercase tracking-[0.3em] mb-4">
+                  <ShieldCheck size={16} /> Research-Only Clinical Synthesis Engine
               </div>
-              <h1 className="text-5xl font-black text-slate-900 tracking-tight leading-tight">Patient Clinical Dashboard</h1>
+              <h1 className="text-5xl font-black text-slate-900 tracking-tight">Probabilistic Analysis</h1>
+              <p className="text-slate-400 mt-2 font-medium">Decision support synthesis for multi-modal clinical artifacts.</p>
             </div>
-          </div>
 
-          <div className="space-y-16">
-            <FileUploader onFilesReady={performAnalysis} isAnalyzing={isAnalyzing} />
-            {analysisResult && <Dashboard data={analysisResult} />}
-          </div>
-        </div>
-      </main>
-
-      {isConfigOpen && <BackendConfigModal onClose={() => setIsConfigOpen(false)} />}
-
-      {analysisResult && (
-        <div className={`fixed bottom-10 right-10 z-[60] flex flex-col items-end transition-all ${isChatOpen ? 'w-[28rem]' : 'w-20'}`}>
-          {isChatOpen ? (
-            <div className="bg-white rounded-[2.5rem] shadow-2xl border border-slate-200 w-full h-[600px] flex flex-col overflow-hidden animate-in slide-in-from-bottom-8">
-              <div className="p-7 bg-indigo-600 text-white flex justify-between items-center font-black">
-                <div className="flex items-center gap-4">
-                  <MessageSquare size={20} />
-                  <p>MedGemma Advocate</p>
+            <div className="space-y-16">
+              {!result && (
+                <div className="animate-in fade-in zoom-in-95 duration-500">
+                  <UploadPanel onFilesReady={handleAnalysis} isAnalyzing={isAnalyzing} />
                 </div>
-                <button onClick={() => setIsChatOpen(false)}><X size={20} /></button>
-              </div>
-              <div className="flex-1 overflow-y-auto p-8 space-y-4 bg-slate-50/30" ref={scrollRef}>
-                {chatMessages.map((msg, i) => (
-                  <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[85%] p-4 rounded-2xl text-sm ${msg.role === 'user' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white border border-slate-100 text-slate-700 shadow-sm'}`}>
-                      {msg.text}
-                    </div>
-                  </div>
-                ))}
-                {isTyping && <div className="text-xs text-indigo-400 font-black animate-pulse px-2">Reasoning...</div>}
-              </div>
-              <div className="p-6 bg-white border-t border-slate-100 flex gap-2">
-                <input 
-                  type="text" value={userInput} onChange={(e) => setUserInput(e.target.value)} 
-                  onKeyDown={(e) => e.key === 'Enter' && (sendMessage(userInput), setUserInput(''))}
-                  placeholder="Ask a medical question..."
-                  className="flex-1 bg-slate-50 border-none rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-                />
-                <button onClick={() => (sendMessage(userInput), setUserInput(''))} className="p-3 bg-indigo-600 text-white rounded-xl shadow-lg"><SendIcon size={20} /></button>
-              </div>
+              )}
+              {result && <DashboardPage data={result} />}
             </div>
-          ) : (
-            <button onClick={() => setIsChatOpen(true)} className="w-20 h-20 bg-indigo-600 text-white rounded-[2rem] shadow-2xl flex items-center justify-center hover:scale-105 transition-all border-4 border-white"><MessageSquare size={32} /></button>
-          )}
-        </div>
-      )}
+          </div>
+        </main>
+      </div>
+
+      <LegalFooter />
 
       {isAnalyzing && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-8 text-center">
-          <div className="bg-white p-12 rounded-[3rem] shadow-2xl max-w-md w-full space-y-8 animate-in zoom-in-95">
-             <div className="w-24 h-24 mx-auto border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-             <div>
-                <h3 className="text-2xl font-black text-slate-900">Streaming to MedGemma</h3>
-                <p className="text-sm text-slate-500 mt-4 leading-relaxed">Synthesizing clinical artifacts and imaging results...</p>
-             </div>
-          </div>
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-2xl z-[100] flex items-center justify-center p-8">
+            <div className="bg-white p-16 rounded-[5rem] text-center space-y-10 animate-in zoom-in-95 max-w-md shadow-2xl border border-slate-200">
+                <div className="relative w-24 h-24 mx-auto">
+                    <div className="absolute inset-0 border-4 border-indigo-100 rounded-full" />
+                    <div className="absolute inset-0 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                </div>
+                <div className="space-y-4">
+                  <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Processing Anonymously</h3>
+                  <p className="text-xs text-slate-400 font-bold leading-relaxed max-w-xs mx-auto">
+                    Data is being processed within a secure, de-identified inference container. PII is not stored on research nodes.
+                  </p>
+                </div>
+                <div className="space-y-3 bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100">
+                  {PROCESSING_STEPS.map((step, i) => (
+                    <div key={i} className={`flex items-center gap-4 transition-all duration-500 ${i === activeStep ? 'text-indigo-600 opacity-100 translate-x-1' : 'text-slate-300 opacity-40'}`}>
+                      <div className={`p-2 rounded-lg ${i === activeStep ? 'bg-indigo-100' : 'bg-transparent'}`}>{step.icon}</div>
+                      <span className="text-[10px] font-black uppercase tracking-widest">{step.text}</span>
+                    </div>
+                  ))}
+                </div>
+            </div>
         </div>
       )}
     </div>

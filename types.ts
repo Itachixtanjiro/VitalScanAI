@@ -1,62 +1,35 @@
 
+export interface ActiveModules {
+  history: boolean;
+  metrics: boolean;
+  imaging: boolean;
+  genomics: boolean;
+  trends: boolean;
+  actions: boolean;
+}
+
 export interface HealthMetric {
   name: string;
   value: number | string;
   unit: string;
   trend: 'up' | 'down' | 'stable';
-  riskLevel: 'Low' | 'Moderate' | 'High';
+  riskLevel: 'Low' | 'Moderate' | 'High' | 'Critical';
   status: 'normal' | 'warning' | 'critical';
   description: string;
   normalRange?: string;
-}
-
-export interface BodySystemStatus {
-  system: string;
-  status: 'Optimal' | 'Stable' | 'Needs Attention' | 'At Risk';
-  score: number; // 0-100
-}
-
-export interface Prediction {
-  condition: string;
-  riskLevel: 'Low' | 'Moderate' | 'High';
-  confidence: number;
-  reasoning: string;
-}
-
-export interface ResearchLink {
-  title: string;
-  uri: string;
-}
-
-export interface ActionItem {
-  task: string;
-  priority: 'High' | 'Medium' | 'Low';
-  category: string;
-}
-
-export interface GenomicMarker {
-  gene: string;
-  variant: string;
-  interpretation: string;
-  significance: 'Pathogenic' | 'VUS' | 'Likely Benign' | 'Benign';
-}
-
-/**
- * Added missing RiskAssessment interface to satisfy import in GenomicsRiskCard.tsx
- */
-export interface RiskAssessment {
-  malignancy_risk: string;
-  summary: string;
+  justification?: string; // Reviewer-friendly explanation
 }
 
 export interface DetailedRiskAssessment {
-  malignancy_risk: {
+  observed_signal_intensity: {
     level: 'Low' | 'Moderate' | 'High' | 'Critical';
     confidence: number;
+    evidence_points: string[]; // For explainability
   };
-  cognitive_progression_risk: 'No Progression' | 'Early' | 'Moderate' | 'Significant Progression';
-  metabolic_cardiovascular_risk: 'Low' | 'Elevated' | 'High';
+  cognitive_progression_observation: 'No Observation' | 'Early' | 'Moderate' | 'Significant Observation';
+  metabolic_cardiovascular_profile: 'Low' | 'Elevated' | 'High';
   summary: string;
+  review_context: string; // The "Why" behind the assessment
 }
 
 export interface ImagingReport {
@@ -67,7 +40,9 @@ export interface ImagingReport {
   findings: string;
   interpretation: string;
   riskScore: number;
-  nextSteps: string[];
+  suggestedFollowUp: string[];
+  roi_coordinates?: { x: number; y: number; w: number; h: number }[]; // Simulated Grad-CAM areas
+  model_confidence: number;
 }
 
 export interface HistoricalDataPoint {
@@ -77,37 +52,52 @@ export interface HistoricalDataPoint {
   cholesterol_hdl?: number;
   blood_pressure_sys?: number;
   blood_pressure_dia?: number;
+  note?: string;
+}
+
+export interface GenomicMarker {
+  gene: string;
+  variant: string;
+  interpretation: string;
+  significance: 'Pathogenic' | 'Likely Pathogenic' | 'VUS' | 'Benign';
 }
 
 export interface AnalysisResult {
+  activeModules: ActiveModules;
   summary: string;
-  vitalityScore: number;
+  vitalityObservation: number;
   biologicalAge: number;
   patientBio: {
     name: string;
     age: number;
     bloodType: string;
+    medicalHistory: string[];
+    familyHistory: string;
+    socialHistory: string;
   };
   metrics: HealthMetric[];
-  bodySystems: BodySystemStatus[];
-  predictions: Prediction[];
   imagingReports?: ImagingReport[];
   genomicMarkers?: GenomicMarker[];
   riskAssessment: DetailedRiskAssessment;
-  actionPlan: ActionItem[];
+  considerationPlan: { task: string; priority: 'High' | 'Medium' | 'Low'; category: string; }[];
   historicalTrends: HistoricalDataPoint[];
-  flaggedNotes: string[];
-  researchSources: ResearchLink[];
-  symptomsDetected: string[];
-  suggestedNextSteps: string[];
+  observationsDetected: string[];
+  suggestedFollowUp: string[];
+}
+
+export interface PreprocessedData {
+  extractedText: string;
+  keyFindings: string[];
+  inferredCategory: string;
 }
 
 export interface UploadedFile {
   id: string;
   name: string;
   type: string;
-  content: string;
+  content: string; 
   category: 'note' | 'lab' | 'imaging' | 'genomics' | 'other';
+  preprocessedData?: PreprocessedData;
 }
 
 export interface ChatMessage {

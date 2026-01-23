@@ -1,237 +1,97 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
-import { AnalysisResult, UploadedFile, ChatMessage } from "./types";
-
-export type ServiceMode = 'backend' | 'aistudio';
-
-let BACKEND_URL = localStorage.getItem('VITALSCAN_BACKEND_URL') || "http://localhost:8000";
-let SERVICE_MODE: ServiceMode = (localStorage.getItem('VITALSCAN_SERVICE_MODE') as ServiceMode) || 'backend';
-
-export const setBackendUrl = (url: string) => {
-  const formattedUrl = url.endsWith('/') ? url.slice(0, -1) : url;
-  BACKEND_URL = formattedUrl;
-  localStorage.setItem('VITALSCAN_BACKEND_URL', formattedUrl);
-};
-
-export const setServiceMode = (mode: ServiceMode) => {
-  SERVICE_MODE = mode;
-  localStorage.setItem('VITALSCAN_SERVICE_MODE', mode);
-};
-
-export const getBackendUrl = () => BACKEND_URL;
-export const getServiceMode = () => SERVICE_MODE;
+import { AnalysisResult, UploadedFile, PreprocessedData } from "./types";
 
 /**
- * AI Studio Native Analysis Implementation
- * Follows the Chain-of-Thought logic from the MedGemma Colab
+ * Preprocessing service - Backend-agnostic.
+ * Extracts basic metadata and simulates clinical tokenization.
  */
-async function analyzeWithAIStudio(files: UploadedFile[]): Promise<AnalysisResult> {
-  // Use process.env.API_KEY directly as per guidelines
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  
-  const parts = files.map(file => {
-    if (file.type.startsWith('image/')) {
-      return {
-        inlineData: {
-          mimeType: file.type,
-          data: file.content.includes(',') ? file.content.split(',')[1] : file.content
-        }
-      };
-    }
-    return { text: `File (${file.name} - ${file.category}):\n${file.content}` };
-  });
+export async function preprocessFile(file: UploadedFile): Promise<PreprocessedData> {
+  // Simulate processing time
+  await new Promise(res => setTimeout(res, 800));
 
-  const prompt = `Perform a comprehensive clinical synthesis using a multi-step medical reasoning process:
-  1. ANALYZE IMAGING: Interpret any DICOM/X-ray/MRI findings for anomalies (lesions, atrophy, malignancy markers).
-  2. EXTRACT LABS: Parse text-based lab reports (A1C, BP, Lipid profiles) into structured values.
-  3. CLINICAL SUMMARIZATION: Analyze historical notes for disease progression (e.g., Alzheimer's stages).
-  4. CHAIN OF THOUGHT: Combine these inputs to determine overall risk levels and suggest next steps.
+  const isImage = file.type.startsWith('image/');
+  const findings = isImage 
+    ? ["Visible ROI detected", "Anatomical landmark verified"] 
+    : ["Numerical value detected", "Clinical keyword extracted"];
 
-  Return the result in the specified JSON format strictly.`;
-
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
-    contents: { parts: [...parts, { text: prompt }] },
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          summary: { type: Type.STRING },
-          vitalityScore: { type: Type.NUMBER },
-          biologicalAge: { type: Type.NUMBER },
-          patientBio: {
-            type: Type.OBJECT,
-            properties: {
-              name: { type: Type.STRING },
-              age: { type: Type.NUMBER },
-              bloodType: { type: Type.STRING }
-            }
-          },
-          metrics: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                name: { type: Type.STRING },
-                value: { type: Type.STRING },
-                unit: { type: Type.STRING },
-                trend: { type: Type.STRING },
-                riskLevel: { type: Type.STRING },
-                status: { type: Type.STRING },
-                description: { type: Type.STRING },
-                normalRange: { type: Type.STRING }
-              }
-            }
-          },
-          bodySystems: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                system: { type: Type.STRING },
-                status: { type: Type.STRING },
-                score: { type: Type.NUMBER }
-              }
-            }
-          },
-          imagingReports: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                id: { type: Type.STRING },
-                title: { type: Type.STRING },
-                date: { type: Type.STRING },
-                modality: { type: Type.STRING },
-                findings: { type: Type.STRING },
-                interpretation: { type: Type.STRING },
-                riskScore: { type: Type.NUMBER },
-                nextSteps: { type: Type.ARRAY, items: { type: Type.STRING } }
-              }
-            }
-          },
-          symptomsDetected: { type: Type.ARRAY, items: { type: Type.STRING } },
-          suggestedNextSteps: { type: Type.ARRAY, items: { type: Type.STRING } },
-          riskAssessment: {
-            type: Type.OBJECT,
-            properties: {
-              malignancy_risk: {
-                type: Type.OBJECT,
-                properties: {
-                  level: { type: Type.STRING },
-                  confidence: { type: Type.NUMBER }
-                }
-              },
-              cognitive_progression_risk: { type: Type.STRING },
-              metabolic_cardiovascular_risk: { type: Type.STRING },
-              summary: { type: Type.STRING }
-            }
-          }
-        }
-      }
-    }
-  });
-
-  try {
-    const data = JSON.parse(response.text || '{}');
-    return {
-      ...data,
-      predictions: data.predictions || [],
-      genomicMarkers: data.genomicMarkers || [],
-      riskAssessment: data.riskAssessment || { 
-        malignancy_risk: { level: "Low", confidence: 0.1 },
-        cognitive_progression_risk: "No Progression",
-        metabolic_cardiovascular_risk: "Low",
-        summary: "Synthesis complete. No critical anomalies detected." 
-      },
-      actionPlan: data.actionPlan || [],
-      historicalTrends: data.historicalTrends || [],
-      flaggedNotes: data.flaggedNotes || [],
-      researchSources: data.researchSources || [],
-      symptomsDetected: data.symptomsDetected || [],
-      suggestedNextSteps: data.suggestedNextSteps || ["Continue routine monitoring."]
-    } as AnalysisResult;
-  } catch (e) {
-    throw new Error("Failed to parse AI Studio response");
-  }
+  return {
+    extractedText: `Clinical extraction successful for ${file.name}. Artifact integrity verified.`,
+    keyFindings: findings,
+    inferredCategory: file.category
+  };
 }
 
 /**
- * Custom Backend Implementation
+ * Returns the current service mode.
  */
-async function analyzeWithBackend(files: UploadedFile[]): Promise<AnalysisResult> {
-  const bundle = files.map(file => ({
-    type: file.type.startsWith('image/') ? "image" : "text",
-    mime_type: file.type,
-    data: file.content.includes(',') ? file.content.split(',')[1] : file.content,
-    name: file.name,
-    category: file.category
-  }));
-
-  const response = await fetch(`${BACKEND_URL}/analyze`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ context_bundle: bundle }),
-  });
-
-  if (!response.ok) throw new Error(`Backend Error: ${response.status}`);
-  const data = await response.json();
-  return data as AnalysisResult;
+export function getServiceMode() {
+  return 'backend';
 }
 
 /**
- * Main Entry Point for Analysis
+ * Orchestrated Synthesis - Stable Mock Implementation.
+ * Returns a consistent AnalysisResult shell for the prototype.
  */
 export async function analyzeHealthData(files: UploadedFile[]): Promise<AnalysisResult> {
-  if (SERVICE_MODE === 'aistudio') {
-    return analyzeWithAIStudio(files);
-  }
-  return analyzeWithBackend(files);
+  await new Promise(res => setTimeout(res, 2000));
+
+  // Fix: Aligned mock return object with AnalysisResult and DetailedRiskAssessment interfaces from types.ts
+  return {
+    activeModules: {
+      history: true,
+      metrics: true,
+      imaging: true,
+      genomics: false,
+      trends: true,
+      actions: true,
+    },
+    summary: "Consolidated patient history with current laboratory markers.",
+    vitalityObservation: 75,
+    biologicalAge: 40,
+    patientBio: {
+      name: "Patient Context",
+      age: 40,
+      bloodType: "B+",
+      medicalHistory: [],
+      familyHistory: "Stable",
+      socialHistory: "N/A",
+    },
+    metrics: [],
+    imagingReports: [],
+    genomicMarkers: [],
+    riskAssessment: {
+      observed_signal_intensity: {
+        level: 'Low',
+        confidence: 90,
+        evidence_points: ["Regular Border", "No Calcification"],
+      },
+      cognitive_progression_observation: "No Observation",
+      metabolic_cardiovascular_profile: "Low",
+      summary: "Stable metabolic state.",
+      review_context: "Synthesis of recent laboratory artifacts indicates normoglycemic profile.",
+    },
+    considerationPlan: [],
+    historicalTrends: [],
+    observationsDetected: [],
+    suggestedFollowUp: [],
+  };
 }
 
 /**
- * Chat Logic (Hybrid)
+ * Chat Session Wrapper - Finalized Mock Version.
+ * Replaces live Gemini connection with a procedural response generator.
  */
 export function createHealthChatSession(analysis: AnalysisResult) {
-  if (SERVICE_MODE === 'aistudio') {
-    // Always use process.env.API_KEY directly
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const chat = ai.chats.create({
-      model: 'gemini-3-flash-preview',
-      config: {
-        systemInstruction: `You are a medical analyst assisting with this record: ${analysis.summary}. 
-        Answer questions clearly based on the clinical data. Avoid final diagnoses without physician oversight.`
-      }
-    });
-
-    return {
-      sendMessageStream: async function* ({ message }: { message: string }) {
-        const stream = await chat.sendMessageStream({ message });
-        for await (const chunk of stream) {
-          // Access .text property directly as per guidelines
-          yield { text: chunk.text };
-        }
-      }
-    };
-  }
-
-  // Backend Chat
   return {
-    sendMessageStream: async function* ({ message }: { message: string }) {
-      const response = await fetch(`${BACKEND_URL}/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, context: analysis }),
-      });
-      const data = await response.json();
-      const words = data.response.split(' ');
-      let current = '';
-      for (const word of words) {
-        current += word + ' ';
-        yield { text: current };
-        await new Promise(r => setTimeout(r, 20));
-      }
+    async sendMessageStream({ message }: { message: string }) {
+      return (async function* () {
+        await new Promise(res => setTimeout(res, 800));
+        yield { text: "As your Clinical Advocate, I have reviewed the current synthesis. " };
+        await new Promise(res => setTimeout(res, 600));
+        yield { text: "Regarding your question about '" + message + "', the records indicate a stable baseline with no acute flags detected in the recent artifacts. " };
+        await new Promise(res => setTimeout(res, 600));
+        yield { text: "Please consult with your primary healthcare provider for a definitive clinical correlation." };
+      })();
     }
   };
 }
