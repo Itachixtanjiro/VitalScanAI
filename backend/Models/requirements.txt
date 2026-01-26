@@ -1,0 +1,16 @@
+# Core Data Science & logic
+pandas
+numpy
+joblib
+matplotlib
+seaborn
+
+# Machine Learning & AI
+scikit-learn   # For Cancer & Diabetes prediction (Decision Trees, Random Forest)
+tensorflow     # For Chest X-ray classification (VGG16)
+torch          # For Clinical Note analysis (LLM backend)
+transformers   # For Clinical Note analysis (Hugging Face models)
+mistralai      # For Clinical Note analysis (Mistral API)
+
+# Jupyter Execution
+ipykernel      # Required to run notebooks in VS Code/Jupyter

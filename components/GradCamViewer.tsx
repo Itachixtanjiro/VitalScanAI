@@ -1,22 +1,52 @@
 
-import React, { useState } from 'react';
+import React, { useState, Component, ErrorInfo } from 'react';
 import { Scan, Info, Eye, EyeOff, Layers, ZoomIn, X, Activity, AlertCircle, FileWarning, ShieldAlert } from 'lucide-react';
 
 interface GradCamViewerProps {
   originalImage?: string | null;
   gradCamOverlay?: string | null;
-  roi: { x: number; y: number; w: number; h: number }[];
-  confidence: number;
-  title: string;
+  heatmapOverlay?: string | null; // Alias for gradCamOverlay
+  roi?: { x: number; y: number; w: number; h: number }[];
+  confidence?: number;
+  title?: string;
+  findings?: string[];
 }
 
-export const GradCamViewer: React.FC<GradCamViewerProps> = ({ 
-  originalImage, 
-  gradCamOverlay, 
-  roi, 
-  confidence,
-  title 
+class GradCamErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  readonly state = { hasError: false };
+
+  static getDerivedStateFromError(_: Error) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("GradCamLayout Error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-8 rounded-[2rem] bg-slate-900 border border-slate-800 flex flex-col items-center text-center">
+          <ShieldAlert className="text-rose-500 mb-4" size={48} />
+          <h4 className="text-white font-black uppercase tracking-widest mb-2">Visualization Module Error</h4>
+          <p className="text-slate-500 text-xs max-w-xs">The Explainability Engine encountered a render fault. Raw limits maintained for safety.</p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+const GradCamViewerContent: React.FC<GradCamViewerProps> = ({
+  originalImage,
+  gradCamOverlay,
+  heatmapOverlay,
+  roi = [],
+  confidence = 0,
+  title = "Analysis",
+  findings = []
 }) => {
+  const overlaySrc = gradCamOverlay || heatmapOverlay;
   const [opacity, setOpacity] = useState(0.7);
   const [showOverlay, setShowOverlay] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -27,10 +57,10 @@ export const GradCamViewer: React.FC<GradCamViewerProps> = ({
    * ROI and overlays are meaningless without anatomical ground truth.
    */
   const renderImageContent = (isModal: boolean = false) => {
-    const containerClasses = isModal 
-      ? "flex-1 relative bg-black flex items-center justify-center p-8 min-h-[400px]" 
+    const containerClasses = isModal
+      ? "flex-1 relative bg-black flex items-center justify-center p-8 min-h-[400px]"
       : "relative aspect-square flex items-center justify-center bg-slate-900 overflow-hidden rounded-[2rem] border border-slate-800 shadow-inner";
-    
+
     if (!originalImage) {
       return (
         <div className={containerClasses}>
@@ -51,45 +81,45 @@ export const GradCamViewer: React.FC<GradCamViewerProps> = ({
 
     return (
       <div className={containerClasses}>
-        <img 
-          src={originalImage} 
-          alt="Raw Artifact" 
-          className="absolute inset-0 w-full h-full object-contain select-none z-0" 
+        <img
+          src={originalImage}
+          alt="Raw Artifact"
+          className="absolute inset-0 w-full h-full object-contain select-none z-0"
           loading="eager"
         />
 
         {showOverlay && (
           <div className="absolute inset-0 z-10 pointer-events-none">
-            {gradCamOverlay ? (
-              <img 
-                src={gradCamOverlay} 
-                alt="Attention Map" 
-                className="w-full h-full object-contain transition-opacity duration-300" 
+            {overlaySrc ? (
+              <img
+                src={overlaySrc}
+                alt="Attention Map"
+                className="w-full h-full object-contain transition-opacity duration-300"
                 style={{ opacity }}
               />
             ) : (
               <div className="absolute inset-0 flex items-center justify-center">
-                 <div className="bg-slate-900/80 backdrop-blur-md border border-white/10 px-4 py-2 rounded-xl flex items-center gap-2">
-                    <AlertCircle size={14} className="text-amber-400" />
-                    <span className="text-[8px] font-black text-white uppercase tracking-widest">Heatmap Data Suppressed</span>
-                 </div>
+                <div className="bg-slate-900/80 backdrop-blur-md border border-white/10 px-4 py-2 rounded-xl flex items-center gap-2">
+                  <AlertCircle size={14} className="text-amber-400" />
+                  <span className="text-[8px] font-black text-white uppercase tracking-widest">Heatmap Data Suppressed</span>
+                </div>
               </div>
             )}
 
             {roi && roi.length > 0 && roi.map((area, i) => (
-              <div 
+              <div
                 key={i}
                 className="absolute border-2 border-rose-500 bg-rose-500/10 shadow-[0_0_20px_rgba(244,63,94,0.4)] transition-all duration-700 ease-out"
-                style={{ 
-                  left: `${area.x}%`, 
-                  top: `${area.y}%`, 
-                  width: `${area.w}%`, 
-                  height: `${area.h}%` 
+                style={{
+                  left: `${area.x}%`,
+                  top: `${area.y}%`,
+                  width: `${area.w}%`,
+                  height: `${area.h}%`
                 }}
               >
                 <div className="absolute -top-6 left-0 flex items-center gap-1.5 pointer-events-auto">
                   <span className="text-[8px] font-black bg-rose-500 text-white px-1.5 py-0.5 rounded shadow-sm uppercase tracking-tighter">
-                    ROI-{i+1}
+                    ROI-{i + 1}
                   </span>
                 </div>
               </div>
@@ -111,7 +141,7 @@ export const GradCamViewer: React.FC<GradCamViewerProps> = ({
             <h4 className="text-sm font-black text-white tracking-tight">Explainability Logic</h4>
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{originalImage ? `Signal: ${title}` : 'Input Data Required'}</span>
-              <button 
+              <button
                 onMouseEnter={() => setShowTooltip(true)}
                 onMouseLeave={() => setShowTooltip(false)}
                 className="text-slate-500 hover:text-indigo-400 relative focus:outline-none"
@@ -130,14 +160,14 @@ export const GradCamViewer: React.FC<GradCamViewerProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          <button 
-            disabled={!originalImage || (!gradCamOverlay && roi.length === 0)}
+          <button
+            disabled={!originalImage || (!overlaySrc && roi.length === 0)}
             onClick={() => setShowOverlay(!showOverlay)}
             className={`p-2 rounded-xl transition-all disabled:opacity-20 disabled:cursor-not-allowed ${showOverlay ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-800 text-slate-400'}`}
           >
             {showOverlay ? <Eye size={18} /> : <EyeOff size={18} />}
           </button>
-          <button 
+          <button
             disabled={!originalImage}
             onClick={() => setIsFullscreen(true)}
             className="p-2 bg-slate-800 text-slate-400 hover:text-white rounded-xl transition-all disabled:opacity-20"
@@ -152,13 +182,13 @@ export const GradCamViewer: React.FC<GradCamViewerProps> = ({
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className={`p-5 bg-slate-900/50 rounded-3xl border border-white/5 space-y-3 transition-opacity ${!originalImage || !gradCamOverlay ? 'opacity-20 pointer-events-none' : 'opacity-100'}`}>
+        <div className={`p-5 bg-slate-900/50 rounded-3xl border border-white/5 space-y-3 transition-opacity ${!originalImage || !overlaySrc ? 'opacity-20 pointer-events-none' : 'opacity-100'}`}>
           <div className="flex justify-between items-center">
             <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Heatmap Intensity</span>
             <span className="text-xs font-black text-white">{Math.round(opacity * 100)}%</span>
           </div>
-          <input 
-            type="range" min="0" max="1" step="0.01" value={opacity} 
+          <input
+            type="range" min="0" max="1" step="0.01" value={opacity}
             onChange={(e) => setOpacity(parseFloat(e.target.value))}
             className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
           />
@@ -185,12 +215,18 @@ export const GradCamViewer: React.FC<GradCamViewerProps> = ({
             <button onClick={() => setIsFullscreen(false)} className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl text-white transition-all"><X size={24} /></button>
           </div>
           <div className="flex-1 flex flex-col lg:flex-row p-8 gap-8 overflow-hidden">
-             <div className="flex-1 bg-black rounded-[3rem] border border-white/10 relative overflow-hidden flex items-center justify-center">
-                {renderImageContent(true)}
-             </div>
+            <div className="flex-1 bg-black rounded-[3rem] border border-white/10 relative overflow-hidden flex items-center justify-center">
+              {renderImageContent(true)}
+            </div>
           </div>
         </div>
       )}
     </div>
   );
 };
+
+export const GradCamViewer: React.FC<GradCamViewerProps> = (props) => (
+  <GradCamErrorBoundary>
+    <GradCamViewerContent {...props} />
+  </GradCamErrorBoundary>
+);

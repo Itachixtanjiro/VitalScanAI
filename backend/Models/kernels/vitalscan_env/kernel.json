@@ -1,0 +1,15 @@
+{
+ "argv": [
+  "D:\\VitalScanAI\\backend\\env\\Scripts\\python.exe",
+  "-Xfrozen_modules=off",
+  "-m",
+  "ipykernel_launcher",
+  "-f",
+  "{connection_file}"
+ ],
+ "display_name": "VitalScanAI Env",
+ "language": "python",
+ "metadata": {
+  "debugger": true
+ }
+}

@@ -2,7 +2,6 @@
 logs
 *.log
 npm-debug.log*
-yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
@@ -22,3 +21,48 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Datasets and Large Files
+backend/data/dataset/
+backend/data/images/
+*.zip
+*.tar.gz
+*.rar
+
+# Specific Data Files (Chest X-ray)
+backend/Models/Chest_xray/*.csv
+backend/Models/Chest_xray/*.txt
+backend/Models/Chest_xray/*.pdf
+backend/Models/Chest_xray/images/
+
+# Model Artifacts
+*.h5
+*.keras
+backend/Models/Chest_xray/models_export/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.env
+
+# Temporary/Extra Scripts
+backend/Models/Chest_xray/download_*.py
+backend/Models/Chest_xray/verify_setup.py
+
+# Generated Reports
+test_data_reports/
+
+# Uploads
+backend/data/uploads/
+backend/temp_uploads/
+
+# Cache
+backend/.pytest_cache/
+backend/cache/
+
+# Environment
+.env.development
