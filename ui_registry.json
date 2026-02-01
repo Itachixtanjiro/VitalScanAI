@@ -1,0 +1,40 @@
+{
+  "ui_components": [
+    {
+      "id": "blood_pressure_trend",
+      "trigger_key": "show_bp_trend",
+      "component_name": "BloodPressureChart",
+      "title": "Blood Pressure History",
+      "description": "Longitudinal trend of Systolic/Diastolic pressure readings.",
+      "category": "chart"
+    },
+    {
+      "id": "medication_list",
+      "trigger_key": "show_medication_list",
+      "component_name": "ActiveMedicationsCard",
+      "title": "Current Medications",
+      "description": "List of active prescriptions and dosages found in the note.",
+      "category": "card"
+    },
+    {
+      "id": "lab_results_table",
+      "trigger_key": "show_lab_table",
+      "component_name": "LabResultsTable",
+      "title": "Recent Lab Values",
+      "description": "Structured table of extracted laboratory metrics (Lipids, A1C, etc).",
+      "category": "table"
+    },
+    {
+      "id": "critical_alert",
+      "trigger_key": "critical_alert",
+      "component_name": "CriticalAlertBanner",
+      "title": "Clinical Alert",
+      "description": "High-priority warning based on urgent keywords in the assessment.",
+      "category": "alert"
+    }
+  ],
+  "view_layout": {
+      "default_hidden": ["blood_pressure_trend", "medication_list", "lab_results_table", "critical_alert"],
+      "layout_priority": ["critical_alert", "blood_pressure_trend", "lab_results_table", "medication_list"]
+  }
+}

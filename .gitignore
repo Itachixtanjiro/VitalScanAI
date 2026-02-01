@@ -9,7 +9,12 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+dist-ssr
 *.local
+*.db
+*.sqlite
+*.sqlite3
+
 
 # Editor directories and files
 .vscode/*
@@ -34,11 +39,16 @@ backend/Models/Chest_xray/*.csv
 backend/Models/Chest_xray/*.txt
 backend/Models/Chest_xray/*.pdf
 backend/Models/Chest_xray/images/
+backend/Models/**/*.csv
+
 
 # Model Artifacts
 *.h5
 *.keras
+*.pkl
+*.joblib
 backend/Models/Chest_xray/models_export/
+
 
 # Python
 __pycache__/
@@ -59,6 +69,11 @@ test_data_reports/
 # Uploads
 backend/data/uploads/
 backend/temp_uploads/
+backend/Models/Clinical_note/synthetic-medical-dataset/
+backend/kernels/
+test_exec.*
+test_cancer.json
+
 
 # Cache
 backend/.pytest_cache/
@@ -66,3 +81,8 @@ backend/cache/
 
 # Environment
 .env.development
+
+# Restored Extra Data and Models
+backend/Models/Cancer_risk/genotypes/
+backend/Models/Clinical_note/synthetic-medical-dataset/
+backend/Models/Diabetic_risk/

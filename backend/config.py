@@ -1,5 +1,8 @@
 import os
 from pydantic_settings import BaseSettings
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class Settings(BaseSettings):
     """
@@ -28,8 +31,8 @@ class Settings(BaseSettings):
     LLM_RATE_LIMIT_PER_MIN: int = 10
     
     # ML Config
-    MOCK_ML_PIPELINE: bool = False  # Defaults to Mock for dev
-    
+    MOCK_ML_PIPELINE: bool = False  # Set True for demo mode with random predictions
+
     class Config:
         env_file = ".env"
 

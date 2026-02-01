@@ -97,16 +97,18 @@ export const SummaryPanel: React.FC<SummaryPanelProps> = ({ summary, reasoning }
                   
                   <div className="p-8 md:p-10 bg-slate-50 border border-slate-100 rounded-[3rem] border-l-4 border-l-indigo-500 shadow-inner">
                       <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mb-6 flex items-center gap-2">
-                          <Database size={12} className="text-indigo-500" /> LOGIC TRACEABILITY
+                          <Database size={12} className="text-indigo-500" /> CLINICAL REASONING
                       </h4>
                       {reasoning ? (
-                        <p className="text-sm font-bold text-slate-600 leading-relaxed italic">
-                            {reasoning}
-                        </p>
+                        <div className="text-sm font-bold text-slate-600 leading-relaxed space-y-3">
+                            {reasoning.split('\n').filter(Boolean).map((line, idx) => (
+                              <p key={idx}>{highlightText(line)}</p>
+                            ))}
+                        </div>
                       ) : (
                         <div className="flex items-center gap-4 text-slate-400 py-4">
                           <Loader2 size={18} className="animate-spin opacity-40" />
-                          <p className="text-xs font-black uppercase tracking-widest italic">Logic chain not synthesized for this review.</p>
+                          <p className="text-xs font-black uppercase tracking-widest italic">Clinical reasoning pending synthesis...</p>
                         </div>
                       )}
                   </div>

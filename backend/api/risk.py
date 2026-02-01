@@ -34,18 +34,13 @@ class RiskEngine:
 
     @classmethod
     def analyze(cls, inputs: RiskInput) -> RiskResponse:
-        trace = []
-        
         # 1. X-Ray Contribution
         xray_contrib = inputs.xray_risk * cls.W_XRAY
-        trace.append(f"- **X-Ray Risk** ({inputs.xray_risk:.2f}) * Weight ({cls.W_XRAY}) = **+{xray_contrib:.3f}**")
-        
+
         # 2. Lab Contribution
         lab_contrib = inputs.lab_risk * cls.W_LAB
-        trace.append(f"- **Lab Risk** ({inputs.lab_risk:.2f}) * Weight ({cls.W_LAB}) = **+{lab_contrib:.3f}**")
-        
+
         # 3. Text Flags Contribution
-        # Calculate max penalty from flags found
         flag_score = 0.0
         active_flags = []
         for flag in inputs.parsed_flags:
@@ -53,17 +48,14 @@ class RiskEngine:
             for key, penalty in cls.FLAG_PENALTIES.items():
                 if key in lower_flag:
                     flag_score = max(flag_score, penalty)
-                    active_flags.append(f"{flag}({penalty})")
-        
+                    active_flags.append(flag)
+
         flag_contrib = flag_score * cls.W_FLAGS
-        trace.append(f"- **Text Flags** Max({', '.join(active_flags) or 'None'}) * Weight ({cls.W_FLAGS}) = **+{flag_contrib:.3f}**")
-        
+
         # 4. Aggregation
         total_score = xray_contrib + lab_contrib + flag_contrib
-        # Cap at 1.0
         total_score = min(total_score, 1.0)
-        trace.append(f"\n**Aggregated Score**: `{total_score:.3f}`")
-        
+
         # 5. Thresholding
         if total_score >= 0.75:
             level = "High"
@@ -74,9 +66,16 @@ class RiskEngine:
         else:
             level = "Low"
             status = "Stable / Routine"
-            
-        trace.append(f"> Threshold Applied: Score {total_score:.2f} maps to Level '{level}'")
-        
+
+        # Build data-oriented trace (consumed by synthesis for LLM context)
+        trace = []
+        if inputs.xray_risk > 0:
+            trace.append(f"xray_risk={inputs.xray_risk:.3f}")
+        if inputs.lab_risk > 0:
+            trace.append(f"lab_risk={inputs.lab_risk:.3f}")
+        if active_flags:
+            trace.append(f"flags={','.join(active_flags)}")
+
         return RiskResponse(
             overall_status=status,
             risk_level=level,

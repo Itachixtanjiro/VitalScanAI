@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Mail, ShieldCheck, Fingerprint, Camera, Loader2, HeartPulse, ChevronRight, Lock, AlertTriangle } from 'lucide-react';
 
 interface AuthPortalProps {
-  onAuthenticated: () => void;
+  onAuthenticated: (email: string) => void;
 }
 
 export const AuthPortal: React.FC<AuthPortalProps> = ({ onAuthenticated }) => {
@@ -27,7 +27,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onAuthenticated }) => {
       setTimeout(() => {
         setIsLoading(true);
         setTimeout(() => {
-          onAuthenticated();
+          onAuthenticated("biometric@vitalscan.local");
           stream.getTracks().forEach(track => track.stop());
         }, 2000);
       }, 3000);
@@ -42,7 +42,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onAuthenticated }) => {
     if (!email || !acknowledged) return;
     setIsLoading(true);
     setTimeout(() => {
-      onAuthenticated();
+      onAuthenticated(email);
     }, 1500);
   };
 

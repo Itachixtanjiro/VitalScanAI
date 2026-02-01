@@ -111,7 +111,7 @@ class Database:
                 modality TEXT NOT NULL,
                 findings TEXT,
                 source_file_id TEXT,
-                gradcam_path TEXT,
+                bounding_boxes_json TEXT,
                 FOREIGN KEY (session_id) REFERENCES analysis_sessions(id),
                 FOREIGN KEY (source_file_id) REFERENCES uploaded_files(id)
             )
@@ -235,40 +235,23 @@ class Database:
         modality: str,
         findings: str,
         source_file_id: Optional[str] = None,
-        gradcam_base64: Optional[str] = None
-    ) -> Optional[str]:
-        """Save imaging artifact and optionally the GradCAM heatmap - ASYNC."""
-        gradcam_path = None
-
-        # Save GradCAM image if provided
-        if gradcam_base64:
-            session_dir = UPLOADS_PATH / session_id
-            session_dir.mkdir(parents=True, exist_ok=True)
-            gradcam_path = session_dir / f"gradcam_{uuid.uuid4().hex[:8]}.png"
-
-            try:
-                # Decode base64 and save ASYNCHRONOUSLY
-                img_data = base64.b64decode(gradcam_base64)
-                async with aiofiles.open(gradcam_path, 'wb') as f:
-                    await f.write(img_data)
-                gradcam_path = str(gradcam_path)
-            except Exception as e:
-                logger.error(f"Failed to save GradCAM: {e}")
-                gradcam_path = None
-
+        bounding_boxes: Optional[List[Dict]] = None
+    ) -> None:
+        """Save imaging artifact metadata with bounding boxes - ASYNC."""
         conn = await self._get_connection()
         cursor = await conn.cursor()
 
+        # Convert bounding boxes to JSON string
+        bboxes_json = json.dumps(bounding_boxes) if bounding_boxes else None
+
         await cursor.execute('''
             INSERT INTO imaging_artifacts
-            (session_id, modality, findings, source_file_id, gradcam_path)
+            (session_id, modality, findings, source_file_id, bounding_boxes_json)
             VALUES (?, ?, ?, ?, ?)
-        ''', (session_id, modality, findings, source_file_id, gradcam_path))
+        ''', (session_id, modality, findings, source_file_id, bboxes_json))
 
         await conn.commit()
         await conn.close()
-
-        return gradcam_path
     
     async def get_analysis_history(self, limit: int = 20) -> List[Dict]:
         """Get recent analysis sessions."""

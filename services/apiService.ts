@@ -4,6 +4,15 @@
  */
 
 // Get API base URL from environment variable, fallback to localhost
+import type {
+  XRayPredictionResponse,
+  CervicalCancerRiskInput,
+  CervicalCancerRiskResponse,
+  DiabetesRiskInput,
+  DiabetesRiskResponse,
+  ClinicalNoteResponse
+} from '../types/ClinicalSynthesis';
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
 /**
@@ -14,7 +23,7 @@ async function fetchAPI<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
-  
+
   try {
     const response = await fetch(url, {
       ...options,
@@ -111,29 +120,104 @@ export async function analyzeHealthData(files: File[]) {
 }
 
 /**
- * Get chest X-ray prediction with GradCAM
+ * Get chest X-ray prediction with Grad-CAM visualization
  */
-export async function predictChestXray(imageFile: File) {
-  return uploadFiles<{
-    prediction: string;
-    confidence: number;
-    gradcam_data?: string;
-    findings?: string[];
-  }>('/api/imaging/predict/chest-xray', [imageFile]);
+export async function predictChestXray(imageFile: File, includeGradcam: boolean = true) {
+  const url = `${API_BASE_URL}/api/imaging/predict/chest-xray/?include_gradcam=${includeGradcam}`;
+  const formData = new FormData();
+  formData.append('file', imageFile);
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      throw new Error(error.detail || `HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    return await response.json() as XRayPredictionResponse;
+  } catch (error) {
+    console.error('API Error [chest-xray]:', error);
+    throw error;
+  }
 }
 
 /**
- * Get cancer risk prediction
+ * Get cervical cancer risk prediction (JSON Input)
  */
-export async function predictCancerRisk(files: File[]) {
-  return uploadFiles('/api/risk/predict/cancer', files);
+export async function predictCancerRisk(data: CervicalCancerRiskInput) {
+  return fetchAPI<CervicalCancerRiskResponse>('/api/risk/predict/cancer', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
 }
 
 /**
- * Get diabetes risk prediction
+ * Parse clinical note text
  */
-export async function predictDiabetesRisk(files: File[]) {
-  return uploadFiles('/api/risk/predict/diabetes', files);
+export async function parseClinicalNote(text: string, useLlm: boolean = true) {
+  return fetchAPI<ClinicalNoteResponse>('/api/notes/parse', {
+    method: 'POST',
+    body: JSON.stringify({
+      text,
+      use_llm: useLlm,
+      use_bert: true
+    }),
+  });
+}
+
+/**
+ * Get diabetes risk prediction (JSON Input)
+ */
+export async function predictDiabetesRisk(data: DiabetesRiskInput) {
+  return fetchAPI<DiabetesRiskResponse>('/api/risk/predict/diabetes', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+// ============================================
+// Sample Test Cases API
+// ============================================
+
+export interface SampleCase {
+  id: string;
+  name: string;
+  description: string;
+  expected_findings: string[];
+  category: string;
+  filename: string;
+  available: boolean;
+}
+
+/**
+ * Get list of available sample test cases
+ */
+export async function getSampleCases(category?: string): Promise<SampleCase[]> {
+  const params = category ? `?category=${category}` : '';
+  return fetchAPI<SampleCase[]>(`/api/samples/list${params}`);
+}
+
+/**
+ * Get sample image URL for display
+ */
+export function getSampleImageUrl(category: string, filename: string): string {
+  return `${API_BASE_URL}/api/samples/image/${category}/${filename}`;
+}
+
+/**
+ * Get sample image as base64 for API testing
+ */
+export async function getSampleBase64(sampleId: string): Promise<{
+  id: string;
+  name: string;
+  expected_findings: string[];
+  image_base64: string;
+}> {
+  return fetchAPI(`/api/samples/base64/${sampleId}`);
 }
 
 /**

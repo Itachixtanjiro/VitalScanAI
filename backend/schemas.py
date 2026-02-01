@@ -14,10 +14,12 @@ class Conflict(BaseModel):
 
 class ImagingArtifact(BaseModel):
     source_data: str
-    gradcam_data: Optional[str] = None
+    bounding_boxes: Optional[List[dict]] = None  # Simple bounding boxes for visualization
     roi_coordinates: Optional[List[dict]] = None
     modality: str
     findings: str
+
+
 
 class Biomarker(BaseModel):
     name: str
@@ -60,3 +62,5 @@ class ClinicalAnalysisResult(BaseModel):
     longitudinal_trends: List[LongitudinalTrend] = []
     
     patient_context: Optional[PatientContext] = None
+    
+    ui_hints: Optional[dict] = None  # UI Triggers (e.g., { "show_bp_trend": true })

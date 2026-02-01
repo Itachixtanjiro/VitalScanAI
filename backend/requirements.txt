@@ -1,0 +1,39 @@
+# Core Framework
+fastapi>=0.100.0
+uvicorn>=0.22.0
+python-multipart>=0.0.6
+pydantic>=2.0.0
+python-dotenv>=1.0.0
+
+# Machine Learning (Legacy TF for X-Ray Model)
+tensorflow==2.10.1
+tf-keras>=2.15.0
+h5py>=3.10.0
+scipy>=1.10.0
+numpy<2.0.0
+# protobuf pinned for TF 2.10 compatibility
+protobuf==3.19.6
+
+# Torch (for MedGemma/LLM components)
+torch>=2.0.0
+torchvision>=0.15.0
+
+# LLM & AI Agents
+mistralai>=0.4.0
+transformers>=4.30.0
+accelerate>=0.20.0
+
+# Image Processing & Visualization
+pillow>=10.0.0
+matplotlib>=3.7.0
+opencv-python-headless>=4.8.0
+
+# Utilities
+requests>=2.31.0
+pandas>=2.0.0
+aiofiles>=23.0.0
+httpx>=0.24.0
+
+# Observability (Optional, unpinned to avoid conflicts)
+opentelemetry-api
+opentelemetry-sdk

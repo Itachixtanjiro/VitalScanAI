@@ -1,14 +1,42 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import settings
-from api import session, imaging, llm, risk, synthesis, rag, database # Restored
-from api.routers import xray, cancer, diabetes # Corrected Paths
+from api import session, imaging, llm, risk, synthesis, rag, database, admin # Restored
+from api.routers import xray, cancer, diabetes, samples, clinical_notes # Corrected Paths
 from api import report_routes
+
+from contextlib import asynccontextmanager
+from api.model_loader import ModelLoader
+import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Pre-load models
+    try:
+        logger.info("Pre-loading X-Ray Fusion Model...")
+        await asyncio.to_thread(ModelLoader.get_xray_model)
+        logger.info("X-Ray Fusion Model pre-loaded successfully")
+    except Exception as e:
+        logger.error(f"Failed to pre-load X-Ray Fusion Model: {e}")
+
+    try:
+        logger.info("Pre-loading DenseNet Grad-CAM Model...")
+        await asyncio.to_thread(ModelLoader.get_xray_gradcam_model)
+        logger.info("DenseNet Grad-CAM Model pre-loaded successfully")
+    except Exception as e:
+        logger.error(f"Failed to pre-load DenseNet Grad-CAM Model: {e}")
+
+    yield
+    # Shutdown logic (if any)
 
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="Research Prototype - NOT FOR CLINICAL USE"
+    description="Research Prototype - NOT FOR CLINICAL USE",
+    lifespan=lifespan
 )
 
 # CORS Configuration
@@ -34,6 +62,9 @@ app.include_router(xray.router, prefix="/api/imaging/predict/chest-xray", tags=[
 app.include_router(cancer.router, prefix="/api/risk/predict/cancer", tags=["Cancer"])
 app.include_router(diabetes.router, prefix="/api/risk/predict/diabetes", tags=["Diabetes"])
 app.include_router(report_routes.router, prefix="/api/analysis/report", tags=["Report Analysis"])
+app.include_router(samples.router, prefix="/api/samples", tags=["Sample Cases"])
+app.include_router(clinical_notes.router, prefix="/api/notes", tags=["Clinical Notes"])
+app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
 
 @app.get("/health")
 async def health_check():

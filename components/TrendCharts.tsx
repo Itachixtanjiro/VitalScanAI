@@ -1,15 +1,19 @@
 
 import React from 'react';
-import { 
+import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, Legend
 } from 'recharts';
 import { Heart, Activity, DatabaseZap } from 'lucide-react';
-import { getA1CStyles } from '../constants';
+const getA1CStyles = (value: number) => {
+  if (value >= 6.5) return { bg: 'bg-rose-600', text: 'text-rose-600' };
+  if (value >= 5.7) return { bg: 'bg-amber-500', text: 'text-amber-500' };
+  return { bg: 'bg-emerald-500', text: 'text-emerald-500' };
+};
 
 export const TrendCharts: React.FC<{ data: any[] }> = ({ data }) => {
   const hasData = data && Array.isArray(data) && data.length >= 2;
-  
+
   if (!hasData) {
     return (
       <div className="bg-white p-12 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center h-[400px]">
@@ -42,9 +46,9 @@ export const TrendCharts: React.FC<{ data: any[] }> = ({ data }) => {
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={data} margin={{ top: 10, right: 30, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8', fontWeight: 700}} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8', fontWeight: 700}} domain={[60, 160]} />
-                <Tooltip 
+                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 700 }} dy={10} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 700 }} domain={[60, 160]} />
+                <Tooltip
                   contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '16px' }}
                   itemStyle={{ fontSize: '12px', fontWeight: 'bold' }}
                 />
@@ -70,17 +74,17 @@ export const TrendCharts: React.FC<{ data: any[] }> = ({ data }) => {
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={data} margin={{ top: 10, right: 30, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8', fontWeight: 700}} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8', fontWeight: 700}} domain={[4, 8]} />
-                <Tooltip 
+                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 700 }} dy={10} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 700 }} domain={[4, 8]} />
+                <Tooltip
                   contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '16px' }}
                   itemStyle={{ fontSize: '12px', fontWeight: 'bold' }}
                 />
-                <Line 
-                  type="monotone" 
-                  dataKey="a1c" 
-                  stroke="#6366f1" 
-                  strokeWidth={4} 
+                <Line
+                  type="monotone"
+                  dataKey="a1c"
+                  stroke="#6366f1"
+                  strokeWidth={4}
                   isAnimationActive={true}
                   dot={(props: any) => {
                     const { cx, cy, payload } = props;
@@ -90,7 +94,7 @@ export const TrendCharts: React.FC<{ data: any[] }> = ({ data }) => {
                     const hexColor = color === 'rose-600' ? '#e11d48' : color === 'amber-500' ? '#f59e0b' : '#16a34a';
                     return <circle key={`dot-${cx}-${cy}`} cx={cx} cy={cy} r={6} fill={hexColor} stroke="#fff" strokeWidth={2} />;
                   }}
-                  name="HbA1c Glycation" 
+                  name="HbA1c Glycation"
                 />
               </LineChart>
             </ResponsiveContainer>

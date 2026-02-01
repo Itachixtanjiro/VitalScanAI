@@ -43,7 +43,13 @@ export interface ClinicalAnalysisResult {
 
   imaging_artifact?: {
     source_data: string;
-    gradcam_data?: string;
+    bounding_boxes?: {
+      condition: string;
+      confidence: number;
+      label: string;
+      box: { x: number; y: number; width: number; height: number };
+      color: string;
+    }[];
     roi_coordinates?: { x: number; y: number; w: number; h: number; }[];
     modality: string;
     findings: string;

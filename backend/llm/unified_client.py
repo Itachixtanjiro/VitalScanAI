@@ -1,14 +1,13 @@
 import logging
 from typing import Optional
 from llm.mistral_client import mistral_client
-from llm.medgemma_client import medgemma_client
 
 logger = logging.getLogger(__name__)
 
 class UnifiedLLMClient:
     """
     Manages LLM routing strategies.
-    Strategy: PRIMARY (Mistral) -> FALLBACK (MedGemma)
+    Strategy: PRIMARY (Mistral) ONLY
     """
     
     async def execute_task(self, task_type: str, input_text: str) -> Optional[str]:
@@ -22,16 +21,7 @@ class UnifiedLLMClient:
         except Exception as e:
             logger.error(f"Primary LLM unexpected crash: {e}")
 
-        # 2. Key Fallback (MedGemma)
-        logger.warning("Primary LLM failed or disabled. Switching to Fallback (MedGemma).")
-        try:
-            result = await medgemma_client.execute_task(task_type, input_text)
-            if result:
-                 logger.info("Fallback LLM (MedGemma) success.")
-                 return result
-        except Exception as e:
-             logger.error(f"Fallback LLM failed: {e}")
-             
+        logger.warning("Primary LLM failed. No fallback available.")
         return None
 
 unified_client = UnifiedLLMClient()

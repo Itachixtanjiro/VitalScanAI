@@ -1,19 +1,80 @@
 import os
+import io
 import time
 import base64
+import asyncio
+import numpy as np
+import tensorflow as tf
+from PIL import Image
 from fastapi import APIRouter, UploadFile, File, HTTPException, Form
 from fastapi.responses import FileResponse
 from typing import List, Optional
 from loguru import logger
 from schemas import ClinicalAnalysisResult, IntensityLevel, ConsensusState, ImagingArtifact
-from ml.xray_model import xray_model
-from ml.preprocess import ImagePreprocessor
-from ml.gradcam import gradcam
+from api.model_loader import ModelLoader, ModelLoadError
+from ml.bbox_generator import generate_bounding_boxes, format_for_frontend
 from api.risk import RiskEngine, RiskInput
-from llm.medgemma_client import medgemma_client
+from llm.unified_client import unified_client
+from ml.clinical_agent import clinical_agent
 from db.database import db
 from utils.file_validator import FileValidator
+
 router = APIRouter()
+
+
+def _generate_fallback_reasoning(risk_assessment, findings_summary: str, parsed_flags: list) -> str:
+    """Generate clinical reasoning when LLM is unavailable."""
+    parts = []
+
+    # Radiographic findings
+    if "No radiographic" in findings_summary:
+        parts.append("No radiographic data was included in this analysis.")
+    else:
+        parts.append(f"Radiographic analysis was performed. {findings_summary}")
+
+    # Clinical flags
+    if parsed_flags:
+        parts.append(
+            f"Clinical text analysis identified the following flags: {', '.join(parsed_flags)}. "
+            "These should be reviewed in context of the patient's full clinical history."
+        )
+
+    # Risk-level interpretation
+    level_text = {
+        "High": (
+            "The aggregated assessment indicates elevated risk. "
+            "Clinical correlation with primary records is strongly advised."
+        ),
+        "Moderate": (
+            "The assessment suggests moderate risk. "
+            "Continued monitoring and follow-up evaluation are recommended."
+        ),
+        "Low": (
+            "The overall risk assessment is low. "
+            "Routine follow-up is appropriate unless new symptoms present."
+        ),
+    }
+    parts.append(level_text.get(risk_assessment.risk_level, "Risk level could not be determined."))
+
+    return " ".join(parts)
+
+
+# Image preprocessing constants
+IMG_SIZE = (224, 224)
+CLASSES = ['Atelectasis', 'Cardiomegaly', 'Consolidation', 'Edema', 'Effusion',
+           'Emphysema', 'Fibrosis', 'Hernia', 'Infiltration', 'Mass', 'No Finding',
+           'Nodule', 'Pleural_Thickening', 'Pneumonia', 'Pneumothorax']
+
+
+def preprocess_image_for_model(image_bytes: bytes) -> tuple:
+    """Preprocess image for real model inference. Returns (img_array, original_array)."""
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    img = img.resize(IMG_SIZE)
+    original_array = np.array(img)
+    img_array = tf.keras.preprocessing.image.img_to_array(img)
+    img_array = np.expand_dims(img_array, axis=0) / 255.0
+    return img_array, original_array
+
 
 @router.post("/analyze", response_model=ClinicalAnalysisResult)
 async def analyze_synthesis(
@@ -48,20 +109,38 @@ async def analyze_synthesis(
             content_type = file_data['type']
             
             if content_type and content_type.startswith("image/"):
-                # Run X-Ray Pipeline
+                # Run X-Ray Pipeline with REAL model
                 logger.info(f"Processing image: {filename}")
-                preprocessed = ImagePreprocessor.preprocess(content)
-                prediction = xray_model.predict(preprocessed)
 
-                xray_risk = prediction["malignancy_risk"]
+                # Get the real X-ray model (raises ModelLoadError if unavailable)
+                model = ModelLoader.get_xray_model()
 
-                # Generate GradCAM with ROI markers based on risk score
-                heatmap = gradcam.generate(
-                    preprocessed,
-                    target_class="malignant",
-                    risk_score=xray_risk,
-                    add_roi_markers=True
+                # Preprocess for model inference
+                img_array, original_array = await asyncio.to_thread(
+                    preprocess_image_for_model, content
                 )
+
+                # Run inference
+                preds = await asyncio.to_thread(model.predict, img_array)
+
+                # Parse predictions (real model returns probabilities for each class)
+                results = []
+                for i, class_name in enumerate(CLASSES):
+                    results.append({"condition": class_name, "probability": float(preds[0][i])})
+                results.sort(key=lambda x: x['probability'], reverse=True)
+
+                top_condition = results[0]['condition']
+                top_index = CLASSES.index(top_condition)
+                xray_risk = results[0]['probability']
+
+                # Build findings string from top conditions
+                top_findings = [f"{r['condition']}: {r['probability']*100:.1f}%" for r in results[:3]]
+                findings_str = f"Top findings: {', '.join(top_findings)}"
+
+                # Generate bounding boxes for visualization
+                bboxes = generate_bounding_boxes(results, confidence_threshold=0.3)
+                formatted_bboxes = format_for_frontend(bboxes)
+                logger.info(f"Generated {len(formatted_bboxes)} bounding boxes for {filename}")
 
                 # Encode the original image as base64 for frontend display
                 source_image_base64 = base64.b64encode(content).decode('utf-8')
@@ -70,27 +149,54 @@ async def analyze_synthesis(
                 mime_type = content_type or 'image/png'
                 source_data_url = f"data:{mime_type};base64,{source_image_base64}"
 
-                # Map to contract with actual image data
+                # Map to contract with bounding box data
                 imaging_result = ImagingArtifact(
-                    source_data=source_data_url,  # Now includes actual image as data URL
-                    gradcam_data=heatmap,
+                    source_data=source_data_url,
+                    bounding_boxes=formatted_bboxes,
                     modality="X-Ray",
-                    findings=f"Automated Scan: Risk {prediction['malignancy_risk']:.2f}, Confidence {prediction['confidence']:.2f}"
+                    findings=findings_str
                 )
                 logger.success(f"Image processed successfully: {filename}")
 
+
             elif content_type and (content_type.startswith("text/") or content_type == "application/json"):
-                # Run LLM Parsing (Bounded)
-                logger.info(f"Processing text document: {filename}")
+                # Run Clinical Agent Parsing (Robust Pipeline)
+                logger.info(f"Processing text document with Clinical Agent: {filename}")
                 text_content = content.decode("utf-8")
-                parsing_result = await medgemma_client.execute_task('extract', text_content)
-                if parsing_result:
-                    keywords = ["critical", "warning", "abnormal", "high", "severe"]
+                
+                # Run in threadpool to avoid blocking event loop
+                parsing_result = await asyncio.to_thread(clinical_agent.process_note, text_content)
+                
+                # Extract Structured Data & Flags
+                if parsing_result and "structured_data" in parsing_result:
+                    structured = parsing_result["structured_data"]
+                    
+                    # 1. UI Hints
+                    # We store them temporarily to attach to result later
+                    # (In a real scenario with multiple files, we'd need to merge them, but assuming 1 main note for now)
+                    if "ui_hints" in structured:
+                         # Attach to request state or return object (handled in assembly step if we scope it out)
+                         # QUICK FIX: Store in a local variable that survives this loop scope? 
+                         # Actually, 'parsed_flags' is used for risk. let's extract risk flags too.
+                         pass
+                         
+                    # 2. Risk Flags
+                    # We can use the 'diagnosis' or 'plan' to find keywords
+                    full_text_search = json.dumps(structured).lower()
+                    keywords = ["critical", "warning", "abnormal", "high", "severe", "emergency"]
                     for kw in keywords:
-                        if kw in parsing_result.lower():
+                        if kw in full_text_search:
                             parsed_flags.append(kw)
+                            
+                    # Store the structured result for the final response
+                    # (We'll attach it to the first text file processed)
+                    parsed_structured_data = structured
+                
                 logger.info(f"Text document processed: {filename}")
                 
+    except ModelLoadError as e:
+        logger.error(f"Model not available: {e}")
+        raise HTTPException(status_code=503, detail=f"X-Ray model not available: {e}")
     except Exception as e:
         logger.error(f"Processing error: {e}")
         raise HTTPException(status_code=500, detail="Pipeline processing failed")
@@ -103,18 +209,37 @@ async def analyze_synthesis(
     )
     risk_assessment = RiskEngine.analyze(risk_input)
     
-    # 4. LLM Summary (Bounded)
-    context_text = f"Patient analysis shows {risk_assessment.risk_level} risk. X-Ray risk score: {xray_risk}."
-    summary = await medgemma_client.execute_task('summary', context_text)
+    # 4. Build findings context for LLM
+    findings_summary = ""
+    if imaging_result:
+        findings_summary = imaging_result.findings or "Radiographic analysis performed, no significant findings."
+    else:
+        findings_summary = "No radiographic data included in this analysis."
+
+    flags_summary = ", ".join(parsed_flags) if parsed_flags else "None detected"
+
+    # 5. LLM Summary (Bounded)
+    summary_context = f"Patient analysis shows {risk_assessment.risk_level} risk. {findings_summary}"
+    summary = await unified_client.execute_task('summary', summary_context)
     if not summary:
         summary = "Summary unavailable."
 
-    # 5. Format reasoning trace for better display
-    # Convert the trace list into a properly formatted string
-    reasoning_lines = []
-    for i, trace_item in enumerate(risk_assessment.reasoning_trace, 1):
-        reasoning_lines.append(f"{i}. {trace_item}")
-    clinical_reasoning = "\n".join(reasoning_lines)
+    # 6. LLM Clinical Reasoning (replaces hardcoded weight formulas)
+    reasoning_context = (
+        f"Analyzed Sources:\n"
+        f"- Radiographic Analysis: {findings_summary}\n"
+        f"- Laboratory Indicators: lab_risk={risk_input.lab_risk:.2f}\n"
+        f"- Clinical Text Flags: {flags_summary}\n\n"
+        f"Overall Risk Assessment: {risk_assessment.risk_level} "
+        f"(Normalized Score: {risk_assessment.risk_score:.3f})\n"
+        f"Status: {risk_assessment.overall_status}"
+    )
+    clinical_reasoning = await unified_client.execute_task('reasoning', reasoning_context)
+    if not clinical_reasoning:
+        # Fallback: generate basic reasoning without LLM
+        clinical_reasoning = _generate_fallback_reasoning(
+            risk_assessment, findings_summary, parsed_flags
+        )
 
     # 6. Assembly
     intensity_map = {
@@ -133,7 +258,8 @@ async def analyze_synthesis(
         imaging_artifact=imaging_result,
         biomarkers=[],
         longitudinal_trends=[],
-        patient_context=None 
+        patient_context=None,
+        ui_hints=parsed_structured_data.get("ui_hints") if 'parsed_structured_data' in locals() else None
     )
     
     # 7. Persist to Database - ALL ASYNC NOW
@@ -164,7 +290,7 @@ async def analyze_synthesis(
                     modality=imaging_result.modality,
                     findings=imaging_result.findings,
                     source_file_id=file_id,
-                    gradcam_base64=imaging_result.gradcam_data
+                    bounding_boxes=imaging_result.bounding_boxes
                 )
 
         logger.info(f"Analysis persisted with session_id: {session_id}")

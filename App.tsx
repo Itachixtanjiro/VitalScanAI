@@ -4,6 +4,7 @@ import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { UploadPanel } from './components/UploadPanel';
 import { DashboardPage } from './pages/Dashboard';
+import { LLMDashboard } from './pages/LLMDashboard';
 import { AuthPortal } from './components/AuthPortal';
 import { LegalFooter } from './components/LegalFooter';
 import { analyzeHealthArtifacts } from './services/api';
@@ -18,12 +19,18 @@ const PROCESSING_STEPS = [
   { icon: <Activity size={18} />, text: "Synthesizing Research Insights..." }
 ];
 
+type PageView = 'dashboard' | 'llm-admin';
+const ADMIN_EMAIL = 'med@med.com';
+
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
+  const [activePage, setActivePage] = useState<PageView>('dashboard');
   const [result, setResult] = useState<SynthesisResponse | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const isAdmin = userEmail.toLowerCase() === ADMIN_EMAIL;
 
   useEffect(() => {
     let interval: any;
@@ -50,39 +57,53 @@ const App: React.FC = () => {
     }
   };
 
-  if (!isAuthenticated) return <AuthPortal onAuthenticated={() => setIsAuthenticated(true)} />;
+  if (!isAuthenticated) return <AuthPortal onAuthenticated={(email: string) => { setUserEmail(email); setIsAuthenticated(true); }} />;
 
   return (
     <div className="min-h-screen flex flex-col bg-[#f8fafc] font-sans overflow-x-hidden">
       <div className="flex flex-1">
-        <Sidebar onReset={() => setResult(null)} onOpenConfig={() => {}} isActive={!!result} />
+        <Sidebar
+          onReset={() => setResult(null)}
+          onOpenConfig={() => {}}
+          isActive={!!result}
+          isAdmin={isAdmin}
+          userEmail={userEmail}
+          activePage={activePage}
+          onNavigate={(page: PageView) => setActivePage(page)}
+        />
 
         <main className="flex-1">
           <Header />
           <div className="p-12 max-w-7xl mx-auto pb-32">
-            {error && (
-              <div className="mb-10 p-6 bg-rose-50 border border-rose-100 rounded-[2.5rem] text-rose-700 flex items-center gap-4 animate-in slide-in-from-top-4">
-                <AlertTriangle className="text-rose-600" />
-                <p className="text-sm font-bold">{error}</p>
-              </div>
-            )}
+            {activePage === 'llm-admin' && isAdmin ? (
+              <LLMDashboard userEmail={userEmail} />
+            ) : (
+              <>
+                {error && (
+                  <div className="mb-10 p-6 bg-rose-50 border border-rose-100 rounded-[2.5rem] text-rose-700 flex items-center gap-4 animate-in slide-in-from-top-4">
+                    <AlertTriangle className="text-rose-600" />
+                    <p className="text-sm font-bold">{error}</p>
+                  </div>
+                )}
 
-            <div className="mb-16">
-              <div className="flex items-center gap-3 text-indigo-600 font-black text-[10px] uppercase tracking-[0.3em] mb-4">
-                  <ShieldCheck size={16} /> Research-Only Clinical Synthesis Engine
-              </div>
-              <h1 className="text-5xl font-black text-slate-900 tracking-tight">Probabilistic Analysis</h1>
-              <p className="text-slate-400 mt-2 font-medium">Decision support synthesis for multi-modal clinical artifacts.</p>
-            </div>
-
-            <div className="space-y-16">
-              {!result && (
-                <div className="animate-in fade-in zoom-in-95 duration-500">
-                  <UploadPanel onFilesReady={handleAnalysis} isAnalyzing={isAnalyzing} />
+                <div className="mb-16">
+                  <div className="flex items-center gap-3 text-indigo-600 font-black text-[10px] uppercase tracking-[0.3em] mb-4">
+                      <ShieldCheck size={16} /> Research-Only Clinical Synthesis Engine
+                  </div>
+                  <h1 className="text-5xl font-black text-slate-900 tracking-tight">Probabilistic Analysis</h1>
+                  <p className="text-slate-400 mt-2 font-medium">Decision support synthesis for multi-modal clinical artifacts.</p>
                 </div>
-              )}
-              {result && <DashboardPage data={result} />}
-            </div>
+
+                <div className="space-y-16">
+                  {!result && (
+                    <div className="animate-in fade-in zoom-in-95 duration-500">
+                      <UploadPanel onFilesReady={handleAnalysis} isAnalyzing={isAnalyzing} />
+                    </div>
+                  )}
+                  {result && <DashboardPage data={result} />}
+                </div>
+              </>
+            )}
           </div>
         </main>
       </div>

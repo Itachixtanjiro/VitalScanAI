@@ -7,7 +7,7 @@ from pydantic import BaseModel
 import hashlib
 import logging
 from config import settings
-from llm.medgemma_client import medgemma_client, CircuitBreakerOpenException, SafetyViolationException
+from llm.unified_client import unified_client
 from cache.redis import redis_client
 from utils.limiter import limiter
 
@@ -29,7 +29,7 @@ async def summarize_text(request: SummarizeRequest, req_context: Request):
     - Feature Flag check
     - Rate Limiting (IP-based)
     - Response Caching (Redis)
-    - Circuit Breaker & Safety Rails
+    - Unified LLM Client (Mistral)
     """
     # 1. Feature Flag Check
     if not settings.LLM_ENABLED:
@@ -52,7 +52,7 @@ async def summarize_text(request: SummarizeRequest, req_context: Request):
 
     try:
         # 4. Execution
-        summary = await medgemma_client.execute_task('summary', request.text)
+        summary = await unified_client.execute_task('summary', request.text)
         if not summary:
              raise HTTPException(status_code=503, detail="Service unavailable or token limit exceeded.")
         
@@ -61,10 +61,6 @@ async def summarize_text(request: SummarizeRequest, req_context: Request):
         
         return {"summary": summary, "cached": False}
 
-    except CircuitBreakerOpenException:
-        raise HTTPException(status_code=503, detail="Service temporarily unavailable (Circuit Breaker).")
-    except SafetyViolationException:
-        raise HTTPException(status_code=400, detail="Content safety violation. Input rejected.")
     except Exception as e:
         logger.error(f"LLM endpoint error: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal processing error.")
@@ -72,42 +68,20 @@ async def summarize_text(request: SummarizeRequest, req_context: Request):
 @router.get("/health")
 async def llm_health_check():
     """
-    Check MedGemma client health status.
-    Returns circuit breaker state and performs a quick test call.
+    Check LLM client health status.
     """
     try:
-        # Check circuit breaker status
-        cb_status = "OPEN" if medgemma_client.circuit_breaker_failures >= medgemma_client.circuit_breaker_threshold else "CLOSED"
-        
         # Perform a quick test call
-        test_result = await medgemma_client.execute_task('summary', 'Health check test.')
+        test_result = await unified_client.execute_task('summary', 'Health check test.')
         
         return {
             "status": "healthy" if test_result else "degraded",
-            "circuit_breaker": cb_status,
-            "circuit_breaker_failures": medgemma_client.circuit_breaker_failures,
-            "test_response": test_result[:50] + "..." if test_result and len(test_result) > 50 else test_result,
-            "max_retries": medgemma_client.max_retries,
-            "timeout_sec": medgemma_client.timeout_sec
-        }
-    except CircuitBreakerOpenException:
-        return {
-            "status": "unavailable",
-            "circuit_breaker": "OPEN",
-            "circuit_breaker_failures": medgemma_client.circuit_breaker_failures,
-            "test_response": None,
-            "error": "Circuit breaker is open"
-        }
-    except SafetyViolationException as e:
-        return {
-            "status": "safety_blocked",
-            "circuit_breaker": "CLOSED",
-            "error": str(e)
+            "provider": "Unified (Mistral)",
+            "test_response": test_result[:50] + "..." if test_result and len(test_result) > 50 else test_result
         }
     except Exception as e:
         return {
             "status": "error",
-            "circuit_breaker": "UNKNOWN",
             "error": str(e)
         }
 

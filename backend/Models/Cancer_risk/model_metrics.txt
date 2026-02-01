@@ -1,6 +1,0 @@
-Cancer Risk Prediction Model Metrics
-==================================================
-train_accuracy: 0.6053
-test_accuracy: 0.4444
-cv_mean: 0.4101
-cv_std: 0.0200

@@ -1,12 +1,16 @@
 import React, { useState, useRef } from 'react';
 import { ClinicalAnalysisResult } from '../types/ClinicalSynthesis';
-import { SummaryPanel } from '../components/SummaryPanel';
 import { RiskCard } from '../components/RiskCard';
-import { GradCamViewer } from '../components/GradCamViewer';
+import { GenomicPredictionPanel, GenomicVariant, GenomicRiskScore, GenomicPrediction } from '../components/GenomicPredictionPanel';
 import { TrendCharts } from '../components/TrendCharts';
-import { SignalIntensityDisplay } from '../components/SignalIntensityDisplay';
-import { Activity, Scan, LayoutTemplate, Database, AlertCircle, ShieldCheck, Scale, Info, ShieldAlert } from 'lucide-react';
-import { mockMedGemmaValidate, MedGemmaValidation } from '../utils/MedGemmaMock';
+import { Activity, Scan, LayoutTemplate, Info, ShieldAlert, Dna, Pill } from 'lucide-react';
+import uiRegistry from '../ui_registry.json';
+
+// Smart Components (Modernization Phase 3)
+import { SmartVitals } from '../components/smart/SmartVitals';
+import { SmartImaging } from '../components/smart/SmartImaging';
+import { ClinicalFeed } from '../components/smart/ClinicalFeed';
+import { CholesterolData, A1CData, BloodPressureData } from '../components/HealthMetricsPanel'; // Import types
 
 interface DashboardPageProps {
   data: ClinicalAnalysisResult;
@@ -19,24 +23,30 @@ interface AnalysisResult {
 }
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({ data }) => {
-  const { imaging_artifact, biomarkers, longitudinal_trends, patient_context, consensus_state, intensity_level, overall_status, signal_intensity_probability, clinical_reasoning } = data;
+  const { imaging_artifact, biomarkers, longitudinal_trends, patient_context, consensus_state, intensity_level, overall_status, signal_intensity_probability, clinical_reasoning, ui_hints } = data;
+
+  // UI Registry Lookup
+  const alertConfig = uiRegistry.ui_components.find(c => c.id === 'critical_alert');
+  const isCriticalAlert = ui_hints?.critical_alert && alertConfig;
 
   // Real-time Analysis State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [analysisResults, setAnalysisResults] = useState<AnalysisResult[] | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [medGemmaStatus, setMedGemmaStatus] = useState<MedGemmaValidation | null>(null);
+  const [boundingBoxes, setBoundingBoxes] = useState<any[]>([]);
+  const [gradcamHeatmap, setGradcamHeatmap] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const getConsensusStyles = (state: string) => {
-    switch (state) {
-      case 'Unified': return 'bg-emerald-50 text-emerald-700 border-emerald-100';
-      case 'Mixed Signal': return 'bg-amber-50 text-amber-700 border-amber-100';
-      case 'Variance Detected': return 'bg-rose-50 text-rose-700 border-rose-100';
-      default: return 'bg-slate-50 text-slate-700 border-slate-100';
-    }
-  };
+  // Health Metrics State (populated after report analysis)
+  const [cholesterolData, setCholesterolData] = useState<CholesterolData[]>([]);
+  const [a1cData, setA1cData] = useState<A1CData[]>([]);
+  const [bloodPressureData, setBloodPressureData] = useState<BloodPressureData[]>([]);
+
+  // Genomic Data State
+  const [genomicVariants, setGenomicVariants] = useState<GenomicVariant[]>([]);
+  const [genomicRiskScores, setGenomicRiskScores] = useState<GenomicRiskScore[]>([]);
+  const [genomicPredictions, setGenomicPredictions] = useState<GenomicPrediction[]>([]);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -45,7 +55,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ data }) => {
       const objectUrl = URL.createObjectURL(file);
       setPreviewUrl(objectUrl);
       setAnalysisResults(null);
-      setMedGemmaStatus(null);
+      setBoundingBoxes([]);
+      setGradcamHeatmap(null);
+      // Reset health metrics on new file selection
+      setCholesterolData([]);
+      setA1cData([]);
+      setBloodPressureData([]);
+      setGenomicVariants([]);
+      setGenomicRiskScores([]);
+      setGenomicPredictions([]);
     }
   };
 
@@ -83,39 +101,65 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ data }) => {
       const data = await response.json();
       const docType = data.ingestion_metadata?.document_type;
 
-      console.log("Ingestion Metadata:", data.ingestion_metadata);
-
       // Handle Response based on explicitly assigned backend type
       if (docType === 'clinical_report') {
-        const modules = data.modules_run || [];
         const riskDetails = [];
         if (data.cancer_risk) riskDetails.push({ condition: 'Cancer Risk', probability: data.cancer_risk.probability });
         if (data.diabetes_risk) riskDetails.push({ condition: 'Diabetes Risk', probability: data.diabetes_risk.probability });
 
+        // Extract and set health metrics
+        if (data.health_metrics) {
+          if (data.health_metrics.cholesterol?.length > 0) {
+            setCholesterolData(data.health_metrics.cholesterol);
+          }
+          if (data.health_metrics.a1c?.length > 0) {
+            setA1cData(data.health_metrics.a1c);
+          }
+          if (data.health_metrics.blood_pressure?.length > 0) {
+            setBloodPressureData(data.health_metrics.blood_pressure);
+          }
+        }
+
+        // Extract genomic data
+        if (data.genomic_data) {
+          if (data.genomic_data.variants?.length > 0) {
+            setGenomicVariants(data.genomic_data.variants);
+          }
+          if (data.genomic_data.risk_scores?.length > 0) {
+            setGenomicRiskScores(data.genomic_data.risk_scores);
+          }
+          if (data.genomic_data.predictions?.length > 0) {
+            setGenomicPredictions(data.genomic_data.predictions);
+          }
+        }
+
         if (riskDetails.length > 0) {
           setAnalysisResults(riskDetails);
-          setMedGemmaStatus({
-            is_safe_to_display: true,
-            validation_score: 1.0,
-            reasoning: `Analysis of ${data.ingestion_metadata.file_name}: Extracted ${modules.join(', ')}.`
-          });
         } else {
           setAnalysisResults([{ condition: 'Report Analyzed', probability: 1.0 }]);
-          setMedGemmaStatus({ is_safe_to_display: true, validation_score: 1.0, reasoning: "Clinical data extracted. No specific risk modules triggered." });
         }
 
       } else if (docType === 'radiograph') {
-        // X-Ray Flow
-        const predictions = data.predictions;
-        // Mock validation or verify if backend provided it
-        const validation = await mockMedGemmaValidate(predictions);
-        setMedGemmaStatus(validation);
-        setAnalysisResults(predictions);
+        // X-Ray Flow (new format: findings with label/confidence)
+        const findings = data.findings || [];
+        const mapped = findings.map((f: { label: string; confidence: number }) => ({
+          condition: f.label,
+          probability: f.confidence
+        }));
+        setAnalysisResults(mapped);
+        // Store Grad-CAM heatmap overlay if available
+        if (data.gradcam_heatmap) {
+          setGradcamHeatmap(data.gradcam_heatmap);
+        }
       } else {
         // Fallback or Unknown
         console.warn("Unknown document type:", docType);
-        if (data.predictions) {
-          setAnalysisResults(data.predictions); // Fallback to Xray style
+        if (data.findings) {
+          const mapped = data.findings.map((f: { label: string; confidence: number }) => ({
+            condition: f.label,
+            probability: f.confidence
+          }));
+          setAnalysisResults(mapped);
         } else {
           setAnalysisResults([{ condition: 'Unknown Artifact', probability: 0 }]);
         }
@@ -131,20 +175,21 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ data }) => {
 
   return (
     <div className="space-y-12 animate-in fade-in duration-700 pb-20">
-      {/* 1. Clinical Advisory Banner */}
-      <section className="bg-slate-900 text-white rounded-[2.5rem] p-8 md:p-10 border border-slate-800 shadow-xl overflow-hidden relative">
+      {/* 1. Clinical Advisory Banner (Dynamic based on ui_hints) */}
+      <section className={`${isCriticalAlert ? 'bg-rose-600' : 'bg-slate-900'} text-white rounded-[2.5rem] p-8 md:p-10 border border-slate-800 shadow-xl overflow-hidden relative transition-colors duration-500`}>
         {/* ... (Existing Banner Content) ... */}
-        <div className="absolute top-0 right-0 p-8 opacity-5 text-indigo-400"><ShieldAlert size={160} /></div>
+        <div className="absolute top-0 right-0 p-8 opacity-5 text-white"><ShieldAlert size={160} /></div>
         <div className="flex flex-col md:flex-row items-center gap-8 relative z-10">
-          <div className="w-16 h-16 rounded-3xl bg-indigo-600 flex items-center justify-center shrink-0 shadow-lg shadow-indigo-900/50"><Info size={32} /></div>
+          <div className={`w-16 h-16 rounded-3xl ${isCriticalAlert ? 'bg-white text-rose-600' : 'bg-indigo-600 text-white'} flex items-center justify-center shrink-0 shadow-lg shadow-black/20`}><Info size={32} /></div>
           <div className="space-y-3 flex-1 text-center md:text-left">
             <div className="flex items-center justify-center md:justify-start gap-3">
-              <h2 className="text-xl font-black tracking-tight uppercase">Clinical Decision Support Advisory</h2>
-              <span className="px-3 py-1 bg-white/10 rounded-full text-[9px] font-black uppercase tracking-widest border border-white/5">Research Protocol</span>
+              <h2 className="text-xl font-black tracking-tight uppercase">{isCriticalAlert ? alertConfig?.title : "Clinical Decision Support Advisory"}</h2>
+              <span className="px-3 py-1 bg-white/10 rounded-full text-[9px] font-black uppercase tracking-widest border border-white/5">{isCriticalAlert ? "Action Required" : "Research Protocol"}</span>
             </div>
-            <p className="text-sm font-medium text-slate-300 leading-relaxed max-w-4xl">
-              The synthesis presented below is a probabilistic aggregation of de-identified tokens extracted from clinical artifacts.
-              <span className="text-indigo-400 font-bold ml-1">It does not constitute a medical diagnosis.</span> All outputs must be correlated with original patient records by a qualified practitioner.
+            <p className="text-sm font-medium text-white/90 leading-relaxed max-w-4xl">
+              {isCriticalAlert ? alertConfig?.description : "The synthesis presented below is a probabilistic aggregation of de-identified tokens extracted from clinical artifacts."}
+              {!isCriticalAlert && <span className="text-indigo-400 font-bold ml-1">It does not constitute a medical diagnosis.</span>}
+              All outputs must be correlated with original patient records by a qualified practitioner.
             </p>
           </div>
         </div>
@@ -157,39 +202,41 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ data }) => {
           name: res.condition,
           value: (res.probability * 100).toFixed(1),
           unit: '%',
-          status: res.probability > 0.7 ? 'critical' : res.probability > 0.3 ? 'warning' : 'normal',
-          riskLevel: res.probability > 0.7 ? 'Critical' : res.probability > 0.3 ? 'Moderate' : 'Low',
+          status: res.probability > 0.5 ? 'critical' : res.probability > 0.15 ? 'warning' : 'normal',
+          riskLevel: res.probability > 0.5 ? 'Critical' : res.probability > 0.15 ? 'Moderate' : 'Low',
           description: "Real-time probabilistic inference from uploaded artifact.",
-          justification: medGemmaStatus?.reasoning
+          justification: "Inference-based probability."
         })) : data.biomarkers).map((metric, idx) => (
           <RiskCard key={idx} metric={metric as any} />
         ))}
       </section>
 
-      {/* 3. Narrative Synthesis */}
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2">
-          <SummaryPanel
-            summary={analysisResults ? `Analysis of ${selectedFile?.name || 'artifact'} complete. Detected ${analysisResults.length} conditions.` : data.narrative_summary}
-            reasoning={medGemmaStatus?.reasoning || data.clinical_reasoning || "Clinical reasoning trace pending..."}
-          />
-        </div>
+      {/* 3. Clinical Feed (Smart Component replacement for Narrative Synthesis) */}
+      <ClinicalFeed
+        summary={analysisResults ? `Analysis of ${selectedFile?.name || 'artifact'} complete. Detected ${analysisResults.length} conditions.` : data.narrative_summary}
+        reasoning={data.clinical_reasoning || "Clinical reasoning trace pending..."}
+        status={overall_status}
+        isAnalyzing={isAnalyzing}
+        analysisCount={analysisResults ? analysisResults.length : 0}
+      />
 
-        <div className="space-y-6">
-          <div className={`p-8 rounded-[2.5rem] border ${getConsensusStyles(overall_status === 'Critical' ? 'Variance Detected' : 'Unified')} h-full flex flex-col justify-center`}>
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-70 mb-4">SYSTEM STATE</p>
-            <h3 className="text-4xl font-black tracking-tighter mb-2">{isAnalyzing ? "Processing..." : (analysisResults ? "Analysis Done" : overall_status)}</h3>
-            <p className="text-sm font-bold opacity-80 leading-relaxed">
-              {isAnalyzing ? "Ingesting and synthesizing clinical vectors..." : "Awaiting practitioner review of generated insights."}
-            </p>
+      {/* 3b. Active Medications List (Dynamic Trigger) */}
+      {ui_hints?.show_medication_list && (
+        <section className="bg-white rounded-[2.5rem] p-8 border border-slate-200 shadow-sm animate-in slide-in-from-bottom">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl"><Pill size={20} /></div>
+            <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">Active Medications</h3>
           </div>
-        </div>
-      </section>
+          <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 text-slate-500 text-sm font-medium text-center">
+            Medication list extraction visualization is ready for implementation.
+            <br />(Triggered by 'show_medication_list' hint)
+          </div>
+        </section>
+      )}
 
-      {/* 4. Radiographic Verification Trace (Upload & Analysis) */}
+      {/* 4. Smart Radiographic Verification Trace (Upload & Analysis) */}
       <section className="space-y-6">
-        <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] ml-2 flex items-center gap-2"><Scan size={12} className="text-indigo-500" /> Radiographic Verification Trace</h2>
-
+        {/* File Upload UI */}
         <div className="bg-white rounded-[3rem] border border-slate-200 p-8 md:p-10 shadow-sm">
           <h3 className="text-2xl font-black text-slate-800 mb-6">Real-time Analysis Engine</h3>
 
@@ -218,7 +265,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ data }) => {
                     ) : (
                       <img src={previewUrl} alt="Preview" className="h-48 rounded-2xl object-cover shadow-sm" />
                     )}
-                    <div className="absolute -top-2 -right-2 bg-emerald-500 text-white p-1 rounded-full"><ShieldCheck size={16} /></div>
+                    <div className="absolute -top-2 -right-2 bg-emerald-500 text-white p-1 rounded-full"><Info size={16} /></div>
                   </div>
                 ) : (
                   <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-sm mb-4 group-hover:scale-110 transition-transform">
@@ -247,14 +294,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ data }) => {
               )}
             </div>
 
-            {/* Results Preview */}
+            {/* Results Preview (Simplified since details are in SmartImaging) */}
             <div className="relative rounded-[2.5rem] overflow-hidden bg-slate-900 text-white p-10 flex flex-col justify-between min-h-[400px]">
               <div className="absolute top-0 right-0 p-10 opacity-10"><Activity size={200} /></div>
 
               {analysisResults && analysisResults.length > 0 ? (
                 <div className="relative z-10 space-y-6 animate-in slide-in-from-bottom duration-700">
                   <div className="flex items-center gap-3">
-                    <div className={`w-2 h-2 rounded-full ${medGemmaStatus?.is_safe_to_display ? 'bg-emerald-400' : 'bg-amber-400'} animate-pulse`} />
+                    <div className={`w-2 h-2 rounded-full bg-emerald-400 animate-pulse`} />
                     <p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-400">Analysis Complete</p>
                   </div>
 
@@ -265,19 +312,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ data }) => {
                       <span className="text-sm text-white/40 font-bold uppercase tracking-widest">Confidence</span>
                     </p>
                   </div>
-
-                  {/* MedGemma Insight */}
-                  {medGemmaStatus && (
-                    <div className={`p-5 rounded-2xl border ${medGemmaStatus.is_safe_to_display ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-amber-500/10 border-amber-500/20'}`}>
-                      <div className="flex items-center gap-2 mb-2">
-                        <ShieldCheck size={16} className={medGemmaStatus.is_safe_to_display ? 'text-emerald-400' : 'text-amber-400'} />
-                        <span className="text-xs font-black uppercase tracking-widest">MedGemma Validator</span>
-                      </div>
-                      <p className="text-xs font-medium text-white/80 leading-relaxed">
-                        "{medGemmaStatus.reasoning}"
-                      </p>
-                    </div>
-                  )}
 
                   <div className="space-y-2 mt-4">
                     {analysisResults.slice(1, 4).map((res, idx) => (
@@ -302,22 +336,45 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ data }) => {
         </div>
       </section>
 
-      {/* 5. Grad-CAM & Explainability (Conditional) */}
-      {(selectedFile?.type.startsWith('image/') || previewUrl) && (
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <GradCamViewer
-            originalImage={previewUrl || imaging_artifact?.source_data || ''}
-            heatmapOverlay={imaging_artifact?.gradcam_data}
-            findings={analysisResults ? analysisResults.map(r => r.condition) : imaging_artifact?.findings || []}
-          />
-          <SignalIntensityDisplay
-            level={intensity_level}
-            probability={signal_intensity_probability}
+      {/* 5. Smart Imaging Analysis (Replaces Region & Explainability) */}
+      <SmartImaging
+        selectedFile={selectedFile}
+        previewUrl={previewUrl}
+        imagingArtifact={imaging_artifact}
+        boundingBoxes={boundingBoxes}
+        gradcamHeatmap={gradcamHeatmap}
+        analysisResults={analysisResults}
+        isAnalyzing={isAnalyzing}
+        intensityLevel={intensity_level}
+        signalProbability={signal_intensity_probability}
+        reasoning={clinical_reasoning}
+      />
+
+      {/* 6. Smart Vitals Panel (Replaces Health Metrics) */}
+      <SmartVitals
+        cholesterol={cholesterolData}
+        a1c={a1cData}
+        bp={bloodPressureData}
+        patientAge={patient_context?.age}
+        uiHints={ui_hints}
+      />
+
+      {/* 7. Genomic Risk Analysis */}
+      {(genomicVariants.length > 0 || genomicRiskScores.length > 0 || genomicPredictions.length > 0) && (
+        <section className="animate-in slide-in-from-bottom duration-700">
+          <div className="flex items-center gap-2 mb-6">
+            <Dna size={14} className="text-indigo-500" />
+            <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em]">Genomic Analysis</h2>
+          </div>
+          <GenomicPredictionPanel
+            variants={genomicVariants}
+            riskScores={genomicRiskScores}
+            predictions={genomicPredictions}
           />
         </section>
       )}
 
-      {/* 6. Longitudinal Trends */}
+      {/* 8. Longitudinal Trends */}
       <section>
         <TrendCharts data={longitudinal_trends} />
       </section>
